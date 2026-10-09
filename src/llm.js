@@ -4,6 +4,8 @@ import { preview } from './log.js';
 export class GrokClient {
   constructor({ apiKey, model, baseUrl = 'https://api.x.ai/v1', fetchImpl = globalThis.fetch, timeoutMs = 30_000, now = Date.now, log = console }) {
     Object.assign(this, { apiKey, model, baseUrl, fetchImpl, timeoutMs, now, log });
+    // Totals since start, for !stats. `unreported` counts calls whose response had no token usage.
+    this.usage = { calls: 0, tokensIn: 0, tokensOut: 0, reasoning: 0, unreported: 0 };
   }
 
   async chat(messages) {
@@ -31,6 +33,11 @@ export class GrokClient {
     const message = data.choices?.[0]?.message ?? { role: 'assistant', content: '' };
     const u = data.usage ?? {};
     const reasoning = u.completion_tokens_details?.reasoning_tokens;
+    this.usage.calls++;
+    if (u.prompt_tokens == null) this.usage.unreported++;
+    this.usage.tokensIn += u.prompt_tokens ?? 0;
+    this.usage.tokensOut += u.completion_tokens ?? 0;
+    this.usage.reasoning += reasoning ?? 0;
     const tokens = u.prompt_tokens == null ? 'tokens n/a' : `tokens in=${u.prompt_tokens} out=${u.completion_tokens}${reasoning ? ` (reasoning ${reasoning})` : ''}`;
     const result = message.tool_calls?.length
       ? 'tool calls: ' + message.tool_calls.map((c) => `${c.function?.name}(${preview(c.function?.arguments, 80)})`).join(', ')

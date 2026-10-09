@@ -1,6 +1,6 @@
 import { preview } from './log.js';
 import { runTool } from './tools.js';
-import { findCommand } from './commands.js';
+import { commandArgs, findCommand, roleOf, runCommand } from './commands.js';
 
 const KNOWN_BOTS = new Set(['nightbot', 'streamelements', 'streamlabs', 'moobot', 'fossabot', 'wizebot', 'sery_bot', 'soundalerts']);
 const MAX_LEN = 450; // per message for the answer itself; source links can use the rest, up to Twitch's limit
@@ -122,6 +122,7 @@ const secs = (ms) => Math.ceil(ms / 1000);
 export class Bot {
   constructor({ config, twitch, llm, doc, tools = [], now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), log = console, historySize = 20 }) {
     Object.assign(this, { config, twitch, llm, doc, tools, now, sleep, log, historySize });
+    this.startedAt = now(); // for !stats uptime
     this.history = [];
     this.userLastReply = new Map();
     this.lastReplyAt = -Infinity;
@@ -238,8 +239,8 @@ export class Bot {
   }
 
   #command(msg, command, tag) {
-    const text = command.reply();
-    this.log.info(`[bot]${tag} <- ${msg.displayName}: !${command.name}`);
+    this.log.info(`[bot]${tag} <- ${msg.displayName}: ${preview(msg.text, 80)}`);
+    const text = runCommand(command, { args: commandArgs(msg.text), msg, bot: this, role: roleOf(msg, this.config.channel) });
     this.#remember(this.config.botUsername, text);
     if (this.config.dryRun) return (this.log.info(`[dry-run]${tag} would reply to ${msg.displayName}: ${text}`), text);
     this.twitch.say(text, msg.id);

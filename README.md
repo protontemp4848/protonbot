@@ -34,15 +34,26 @@ The doc will be cached for 30 minutes, or you can force a re-read if you restart
 
 ## Chat commands
 
-Anyone in chat can type these. They don't need a mention and never call the LLM.
+They don't need a mention and never call the LLM. All replies go to public chat.
 
-| Command   | Reply                                                                                                 |
-| --------- | ----------------------------------------------------------------------------------------------------- |
-| `!help`   | Lists all the commands                                                                                |
-| `!github` | Link to the source code: https://github.com/protontemp4848/protonbot                                  |
-| `!docs`   | Link to the Google Doc: https://docs.google.com/document/d/1012QUmc-RePLNedKXR5ddZeDm6XcE3GiXcWupuMVa-M/edit?usp=sharing |
+| Command                   | Who    | Reply                                                                                                 |
+| ------------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| `!help [command]`         | anyone | Lists all the commands, or the usage of one                                                           |
+| `!github` (`!gh`, `!code`, `!source`) | anyone | Link to the source code: https://github.com/protontemp4848/protonbot                                  |
+| `!docs` (`!doc`, `!document`) | anyone | Link to the Google Doc: https://docs.google.com/document/d/1012QUmc-RePLNedKXR5ddZeDm6XcE3GiXcWupuMVa-M/edit?usp=sharing |
+| `!stats <tokens\|uptime>` | mods   | Grok calls and tokens used (in, out, reasoning), or how long the bot has been running, since it started |
 
-Commands share the 5s global cooldown, but not the 30s per-user one. To add a command, add it to `COMMANDS` in `src/commands.js`; `!help` picks it up automatically.
+Commands share the 5s global cooldown, but not the 30s per-user one.
+
+### Adding a command
+
+Add it to `COMMANDS` in `src/commands.js`; `!help` picks it up automatically. A command is `{ name, aliases?, description, permission?, usage?, subcommands?, reply(ctx) }`:
+
+- `aliases`: other names it answers to, e.g. `['doc', 'document']`. They run the command exactly like its name (same permission check), and `!help <command>` lists them. A test fails if two commands share a name or alias.
+- `permission`: `all` (default), `mods` (mods and the streamer) or `streamer`. It's checked against the badges Twitch puts on the message, so it can't be faked. Anyone else gets "Sorry, !x is for mods only."
+- `usage`: the arguments it needs, e.g. `'<user>'`. Run without arguments, the command replies with its help instead.
+- `subcommands`: `{ name: { description, reply } }`, used in place of `reply` (see `!stats`). Run bare or with an unknown subcommand, the command replies with its help.
+- `reply({ args, msg, bot })` returns the message. `args` is the words after the command (or subcommand).
 
 ## Behaviour
 

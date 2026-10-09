@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GrokClient } from '../src/llm.js';
-import { recordingLog } from './helpers.js';
+import { recordingLog, silentLog } from './helpers.js';
 
 test('GrokClient sends an OpenAI-style request to xAI and returns the content', async () => {
   let req;
@@ -52,4 +52,16 @@ test('GrokClient logs model, time, tokens and what came back, tagged with the re
     'debug [llm] #7 r2 request: 0 messages, 0 chars, tools=no',
     'info [llm] #7 r2 grok-4 2.34s tokens n/a -> answer (11 chars)',
   ]);
+});
+
+test('GrokClient totals token usage across calls for !stats, counting calls that report none', async () => {
+  const replies = [
+    { usage: { prompt_tokens: 800, completion_tokens: 40, completion_tokens_details: { reasoning_tokens: 30 } }, choices: [{ message: { content: 'a' } }] },
+    { usage: { prompt_tokens: 1200, completion_tokens: 10 }, choices: [{ message: { content: 'b' } }] },
+    { choices: [{ message: { content: 'c' } }] },
+  ];
+  const c = new GrokClient({ apiKey: 'k', model: 'm', fetchImpl: async () => Response.json(replies.shift()), log: silentLog });
+  assert.deepEqual(c.usage, { calls: 0, tokensIn: 0, tokensOut: 0, reasoning: 0, unreported: 0 });
+  for (let i = 0; i < 3; i++) await c.complete([]);
+  assert.deepEqual(c.usage, { calls: 3, tokensIn: 2000, tokensOut: 50, reasoning: 30, unreported: 1 });
 });

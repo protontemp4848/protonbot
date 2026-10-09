@@ -1,12 +1,18 @@
+# Improvements
+
+Generally speaking the way we're putting info in the doc is gross.
+Maybe having _multiple_ docs for context, then having Grok route to the right one would be a better idea.
+
+The problem is obvious from the current doc - it's got some info about the stream, then some junk about nightreign to help with retrieval, that is dumb, we should have it set up so it only adds the context important for that task
+
 # Misc
 
-- We should make a function so you can request a wiki gets added. This should get Grok to write the patch for the person running the bot
-- We need to add alias to the commands (right now docs works but not doc)
-- Stream context, I think there is a compressor thing that can take an active chat and squash it up
-- Can we wire commands into OBS? So A command makes something happen on the screen?
--
+- [ ] We should make a function so you can request a wiki gets added. This should get Grok to write the patch for the person running the bot
+- [ ] We need to add alias to the commands (right now docs works but not doc)
+- [ ] Stream context, I think there is a compressor thing that can take an active chat and squash it up
+- [ ] Can we wire commands into OBS? So A command makes something happen on the screen?
 
 # Commands
 
-- !reload: Reloads the google doc. Mod, Streamer only.
-- !stats: How much we've spent on Grok tokens this stream.
+- [x] !reload: Reloads the google doc. Mod, Streamer only.
+- [x] !stats: How much we've spent on Grok tokens this stream.
