@@ -77,3 +77,26 @@ test('TwitchClient reconnects when the socket drops', async () => {
   assert.equal(FakeWebSocket.instances.length, 2);
   c.close();
 });
+
+test('TwitchClient asks a token function for a fresh token on every connect, and stops if it fails', async () => {
+  FakeWebSocket.instances = [];
+  let n = 0;
+  const c = new TwitchClient({ username: 'protonbot', token: async () => `tok${++n}`, channel: 'dudley', WebSocketImpl: FakeWebSocket, log: silentLog });
+  c.connect();
+  await tick();
+  assert.ok(FakeWebSocket.instances[0].sent.includes('PASS oauth:tok1\r\n'));
+  c.connect();
+  await tick();
+  assert.ok(FakeWebSocket.instances[1].sent.includes('PASS oauth:tok2\r\n'));
+  c.close();
+
+  const errors = [];
+  const bad = new TwitchClient({ username: 'protonbot', token: async () => { throw new Error('refresh failed'); }, channel: 'dudley', WebSocketImpl: FakeWebSocket, log: silentLog });
+  bad.on('error', (e) => errors.push(e.message));
+  bad.connect();
+  await tick();
+  await tick();
+  assert.deepEqual(errors, ['Twitch login failed: refresh failed']);
+  assert.equal(FakeWebSocket.instances.at(-1).readyState, 3, 'socket closed');
+  assert.equal(bad.stopped, true, 'no reconnect loop');
+});

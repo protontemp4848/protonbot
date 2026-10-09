@@ -8,13 +8,27 @@ It uses a public Google Doc as its source of facts. No npm dependencies; needs N
 1. `cp .env.example .env` and fill it in:
    - `XAI_API_KEY`: your Grok key from console.x.ai
    - `GOOGLE_DOC_URL`: a Google Doc shared as **"Anyone with the link can view"**
-   - `TWITCH_BOT_USERNAME` / `TWITCH_OAUTH_TOKEN`: the bot's own Twitch account, plus a user access token with `chat:read chat:edit` scopes (e.g. from https://twitchtokengenerator.com or your own Twitch app)
-2. `npm run dry-run` connects and logs what it _would_ say without sending anything.
-3. `npm start` goes live.
+   - `TWITCH_BOT_USERNAME` / `TWITCH_CLIENT_ID`: the bot's own Twitch account and your Twitch app's Client ID (see [Twitch login](#twitch-login)). Or, instead of a Client ID, put a token you made yourself in `TWITCH_OAUTH_TOKEN`.
+2. `npm run auth` to log the bot in once (optional: `npm start` does it too).
+3. `npm run dry-run` connects and logs what it _would_ say without sending anything.
+4. `npm start` goes live.
+
+## Connection
+
+protonbot will just join your chat as a regular viewer via IRC (so you need to make it a twitch account)
+
+## Twitch login
+
+Twitch tokens expire after about 4 hours, so the bot gets and refreshes its own:
+
+1. At https://dev.twitch.tv/console/apps register an app: any name, OAuth Redirect URL `http://localhost`, category Chat Bot, **Client Type: Public**. Put its Client ID in `TWITCH_CLIENT_ID`.
+2. `npm run auth` prints a link and a code. Open it **while logged in to Twitch as the bot account** and enter the code.
+
+From then on `npm start` reuses the saved token, refreshes it when it's close to expiring, re-checks it hourly and before every reconnect, and only asks you to log in again if the refresh token has died (after 30 days unused). `npm run auth -- --login` forces a fresh login, e.g. to switch accounts. Tokens are kept in `.cache/twitch-token.json` (git-ignored, readable only by you), never written to `.env`.
 
 ## Adding Information to the Bot
 
-To make it easy to collab with your chat on adding information to your chat, you can create a Google Doc.
+To make it easy to collab with your chat on adding information to your bot, you can create a Google Doc.
 This doc will be read in as context when the bot starts.
 The doc will be cached for 30 minutes, or you can force a re-read if you restart the bot.
 

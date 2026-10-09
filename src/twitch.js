@@ -37,6 +37,7 @@ export function parseIrc(line) {
  * Events: 'message' ({ id, channel, user, displayName, text, tags }), 'joined', 'error', 'close'.
  */
 export class TwitchClient extends EventEmitter {
+  /** `token` is a string, or an async function returning one, called on every (re)connect so it can refresh. */
   constructor({ username, token, channel, url = 'wss://irc-ws.chat.twitch.tv:443', WebSocketImpl = globalThis.WebSocket, log = console }) {
     super();
     Object.assign(this, { username, token, channel, url, WebSocketImpl, log });
@@ -52,10 +53,18 @@ export class TwitchClient extends EventEmitter {
     this.ws = ws;
     ws.addEventListener('open', () => {
       this.backoffMs = 1000;
-      this.raw('CAP REQ :twitch.tv/tags twitch.tv/commands');
-      this.raw(`PASS ${this.token ? 'oauth:' + this.token : 'SCHMOOPIIE'}`);
-      this.raw(`NICK ${this.username}`);
-      this.raw(`JOIN #${this.channel}`);
+      const login = (token) => {
+        this.raw('CAP REQ :twitch.tv/tags twitch.tv/commands');
+        this.raw(`PASS ${token ? 'oauth:' + token : 'SCHMOOPIIE'}`);
+        this.raw(`NICK ${this.username}`);
+        this.raw(`JOIN #${this.channel}`);
+      };
+      if (typeof this.token !== 'function') return login(this.token);
+      this.token().then(login, (e) => {
+        this.stopped = true;
+        this.emit('error', new Error(`Twitch login failed: ${e.message}`));
+        ws.close();
+      });
     });
     ws.addEventListener('message', (e) => {
       for (const line of String(e.data).split('\r\n')) if (line) this.#handle(parseIrc(line));

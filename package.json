@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "dry-run": "DRY_RUN=1 node --env-file-if-exists=.env src/index.js",
+    "auth": "node --env-file-if-exists=.env src/authCli.js",
     "test": "node --test test/"
   }
 }

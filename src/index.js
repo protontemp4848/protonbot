@@ -7,8 +7,22 @@ import { MediaWiki } from './wiki.js';
 import { WIKIS } from './wikis.js';
 import { wikiTool } from './tools.js';
 import { createLogger } from './log.js';
+import { authFromEnv } from './auth.js';
 
-const config = loadConfig();
+// With TWITCH_CLIENT_ID set, get or refresh the bot's token before anything else (may ask you to log in once).
+const env = { ...process.env };
+const auth = authFromEnv(env, createLogger({ level: env.LOG_LEVEL }));
+if (auth) {
+  try {
+    env.TWITCH_OAUTH_TOKEN = await auth.token();
+    env.TWITCH_BOT_USERNAME ||= auth.login;
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+}
+
+const config = loadConfig(env);
 const log = createLogger({ level: config.logLevel });
 
 // Never log the OAuth token or API key, only whether they're set.
@@ -20,7 +34,10 @@ log.info(
 
 const doc = new DocCache({ url: config.googleDocUrl, ttlMs: config.docCacheTtlMs, cachePath: config.docCachePath, log });
 const llm = new GrokClient({ apiKey: config.xaiApiKey, model: config.xaiModel, baseUrl: config.xaiBaseUrl, log });
-const twitch = new TwitchClient({ username: config.botUsername, token: config.oauthToken, channel: config.channel, log });
+// A managed token is re-checked (and refreshed if needed) on every reconnect, and hourly as Twitch requires.
+const token = auth ? () => auth.token({ interactive: false }) : config.oauthToken;
+const twitch = new TwitchClient({ username: config.botUsername, token, channel: config.channel, log });
+if (auth) setInterval(() => auth.token({ interactive: false }).catch((e) => log.error(`[auth] ${e.message}`)), 60 * 60_000).unref();
 const tools = config.wikis.map((id) => wikiTool({ id, ...WIKIS[id], wiki: new MediaWiki({ baseUrl: WIKIS[id].baseUrl, label: `wiki:${id}`, log }) }));
 const bot = new Bot({ config, twitch, llm, doc, tools, log });
 
