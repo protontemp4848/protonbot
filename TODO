@@ -1,0 +1,12 @@
+# Misc
+
+- We should make a function so you can request a wiki gets added. This should get Grok to write the patch for the person running the bot
+- We need to add alias to the commands (right now docs works but not doc)
+- Stream context, I think there is a compressor thing that can take an active chat and squash it up
+- Can we wire commands into OBS? So A command makes something happen on the screen?
+-
+
+# Commands
+
+- !reload: Reloads the google doc. Mod, Streamer only.
+- !stats: How much we've spent on Grok tokens this stream.
