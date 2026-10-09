@@ -1,0 +1,13 @@
+{
+  "name": "protonbot",
+  "version": "0.1.0",
+  "description": "LLM-powered (Grok) Twitch chat bot with Google Doc context",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "dry-run": "DRY_RUN=1 node --env-file-if-exists=.env src/index.js",
+    "test": "node --test test/"
+  }
+}
