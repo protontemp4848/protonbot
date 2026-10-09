@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachSources, Bot, extractSources, splitReply, WIKI_TOOL } from '../src/bot.js';
+import { attachSources, Bot, extractSources, splitReply } from '../src/bot.js';
+import { wikiTool } from '../src/tools.js';
+import { WIKIS } from '../src/wikis.js';
 import { recordingLog, silentLog } from './helpers.js';
 
 const baseConfig = { botUsername: 'protonbot', channel: 'dudley', personality: 'Be nice.', replyMode: 'mention', userCooldownMs: 30_000, globalCooldownMs: 5_000, dryRun: false };
@@ -23,7 +25,7 @@ function makeBot(overrides = {}, llmReply = 'sure thing', wiki = null) {
       },
     },
     doc: { get: async () => 'Dudley streams Minecraft on Tuesdays.' },
-    wiki,
+    tools: wiki ? [wikiTool({ id: 'nightreign', ...WIKIS.nightreign, wiki })] : [],
     now: () => t,
     sleep: async (ms) => (sleeps.push({ ms, sentSoFar: sent.length })),
     log: silentLog,
@@ -167,7 +169,7 @@ test('LLM can look something up on the wiki and answer from the result', async (
   );
   await bot.handle(msg('a', '@protonbot what is gladius weak to?', 'm-1'));
   assert.deepEqual(wiki.queries, ['Gladius Beast of Night']);
-  assert.deepEqual(llmCalls[0].tools, [WIKI_TOOL]);
+  assert.deepEqual(llmCalls[0].tools.map((t) => t.function.name), ['lookup_nightreign_wiki']);
   assert.match(llmCalls[0][0].content, /lookup_nightreign_wiki/);
   // Second call carries the assistant tool_call message followed by the matching tool result.
   const [, , assistant, tool] = llmCalls[1];
@@ -207,7 +209,7 @@ test('a failing wiki or malformed tool arguments still produce a reply', async (
   await bot.handle(msg('a', '@protonbot who is wylder'));
   const toolMsgs = llmCalls[1].filter((m) => m.role === 'tool');
   assert.match(toolMsgs[0].content, /Wiki lookup failed \(wiki HTTP 503\)/);
-  assert.match(toolMsgs[1].content, /Wiki lookup failed/);
+  assert.match(toolMsgs[1].content, /Invalid arguments for lookup_nightreign_wiki/);
   assert.equal(sent[0].text, 'not sure, wiki is down');
 });
 
@@ -247,8 +249,8 @@ test('logging: one reply is traceable end to end by its #id, wiki lookup include
   await bot.handle(msg('alice', '@protonbot who is wylder?'));
   assert.deepEqual(log.lines, [
     'info [bot] #1 <- alice: @protonbot who is wylder?',
-    'info [wiki] #1 "Wylder" -> Wylder (13 chars, 0ms) https://w/Wylder',
-    'debug [wiki] #1 text: A Nightfarer.',
+    'info [wiki:nightreign] #1 "Wylder" -> Wylder (13 chars, 0ms) https://w/Wylder',
+    'debug [wiki:nightreign] #1 text: A Nightfarer.',
     'info [bot] #1 no source given; citing looked-up page named in the answer: https://w/Wylder',
     'info [reply] #1 -> alice after 0.0s: wylder is a nightfarer Source: https://w/Wylder',
   ]);
@@ -293,22 +295,22 @@ test('logging: wiki failures, skipped lookups, the tool cap, and cut replies are
   bot.log = log;
   await bot.handle(msg('a', '@protonbot go'));
   const has = (re) => assert.ok(log.lines.some((l) => re.test(l)), `no log line matching ${re}\n${log.lines.join('\n')}`);
-  has(/^warn \[wiki\] #1 lookup failed after 0ms: wiki HTTP 503 \(args: \{"query":"a"\}\)$/);
-  has(/^warn \[wiki\] #1 skipping lookup 4 of 4 \(max 3 per round\)$/);
+  has(/^warn \[wiki:nightreign\] #1 lookup failed after 0ms: wiki HTTP 503 \(args: \{"query":"a"\}\)$/);
+  has(/^warn \[bot\] #1 skipping tool call 4 of 4 \(max 3 per round\)$/);
   has(/^info \[bot\] #1 lookup cap reached/);
   has(/^info \[bot\] #1 reply was 1500 chars, cut to fit 2 message\(s\)$/);
 });
 
 test('with the wiki on, "not sure" only comes after the wiki: no rule tells Grok to give up when the doc lacks something', async () => {
   const { buildSystemPrompt } = await import('../src/bot.js');
-  const withWiki = buildSystemPrompt({ botName: 'b', channel: 'c', personality: '', docText: 'd', wiki: true });
+  const withWiki = buildSystemPrompt({ botName: 'b', channel: 'c', personality: '', docText: 'd', tools: [wikiTool({ id: 'nightreign', ...WIKIS.nightreign, wiki: {} })] });
   assert.doesNotMatch(withWiki, /If it doesn't cover something, say you're not sure/);
   assert.match(withWiki, /ALWAYS call lookup_nightreign_wiki before answering, even if the reference document doesn't mention it/);
   assert.match(withWiki, /Only say you're not sure after the reference document and the wiki both failed/);
   assert.match(withWiki, /Write proper sentences with normal capitalisation and punctuation/);
   assert.match(withWiki, /If the answer differs by phase .* answer each phase separately/, 'stops replies like "Heolstor weak to holy lightning phase 2."');
   assert.match(withWiki, /Answer only what was asked\. Do not tack on extra facts/, 'stops replies like "Caligo weak to strike and fire. Ancient dragon."');
-  const without = buildSystemPrompt({ botName: 'b', channel: 'c', personality: '', docText: 'd', wiki: false });
+  const without = buildSystemPrompt({ botName: 'b', channel: 'c', personality: '', docText: 'd' });
   assert.match(without, /If it doesn't cover something, say you're not sure/, 'without the wiki the old rule still applies');
 });
 

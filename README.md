@@ -12,6 +12,12 @@ It uses a public Google Doc as its source of facts. No npm dependencies; needs N
 2. `npm run dry-run` connects and logs what it _would_ say without sending anything.
 3. `npm start` goes live.
 
+## Adding Information to the Bot
+
+To make it easy to collab with your chat on adding information to your chat, you can create a Google Doc.
+This doc will be read in as context when the bot starts.
+The doc will be cached for 30 minutes, or you can force a re-read if you restart the bot.
+
 ## Behaviour
 
 - Replies (as a threaded reply) only when someone mentions it by name or `@name`. Set `REPLY_MODE=all` to reply to everything.
@@ -23,10 +29,22 @@ It uses a public Google Doc as its source of facts. No npm dependencies; needs N
 
 ### Game Specific Integrations.
 
-#### Elden Ring
+Protonbot has tools to help ask about specific games.
+For example this repo has a Elden Ring Nightreign wiki tool, so you can ask questions like Boss weaknesses, etc
 
-- For Elden Ring Nightreign questions (bosses, Nightfarers, relics, items…) Grok can call a `lookup_nightreign_wiki` tool that searches the [Fextralife Nightreign wiki](https://eldenringnightreign.wiki.fextralife.com) through its MediaWiki API. It makes at most 2 lookup rounds per reply, and results are cached in memory for an hour. If the wiki is down, the bot answers without it. Set `NIGHTREIGN_WIKI=0` to turn this off.
+The wiki tool is supposed to be an example for how you'd add your own, and i've attempted making it modular.
+
+#### Elden Ring Nightreign
+
+- For Elden Ring Nightreign questions (bosses, Nightfarers, relics, items…) Grok can call a `lookup_nightreign_wiki` tool that searches the [Fextralife Nightreign wiki](https://eldenringnightreign.wiki.fextralife.com) through its MediaWiki API. It makes at most 2 lookup rounds per reply, and results are cached in memory for an hour. If the wiki is down, the bot answers without it. Set `WIKIS=none` to turn this off.
 - Answers end with a link to where the information came from, e.g. `Source: https://eldenringnightreign.wiki.fextralife.com/Libra_Creature_of_Night`. Links don't count toward the 450-char answer limit: they go at the end of the last message if it stays under Twitch's 500, otherwise in their own message, but a reply never goes over 2 messages (if there's no room the link is dropped and logged). Only wiki pages looked up for that answer, or links in the Google Doc, are ever posted, so a made-up URL or one planted in a wiki page can't reach chat.
+
+#### Adding a wiki
+
+Any MediaWiki site (Fextralife, Fandom, wiki.gg…) can be added without touching the bot: add an entry to `src/wikis.js` (game name, base URL, what it covers, a few example page names) and list its id in `WIKIS`, e.g. `WIKIS=nightreign,eldenring`. Each wiki becomes its own `lookup_<id>_wiki` tool, gets its own line in the system prompt, and logs as `[wiki:<id>]`.
+
+Other kinds of tools go in `src/tools.js`: a tool is `{ definition, rule, run(args, ctx) }`, and `run` returns `{ content, source? }` (see the comment there). Pass it to `Bot` in `tools`.
+
 - The doc is fetched fresh every time the bot starts, so **restarting picks up doc edits**. After that it's cached in memory for `DOC_CACHE_TTL_MINUTES` (default 30). A copy is kept in `.cache/doc.txt` and is only used if Google can't be reached.
 
 ## Logs
@@ -36,7 +54,7 @@ Every line has a timestamp and a level. Each reply gets a request ID (`#12`) so 
 ```
 16:25:10.546 INFO  [bot] #1 <- alice: @protonbot what is fulghor weak to?
 16:25:14.206 INFO  [llm] #1 r1 grok-4.3 3.66s tokens in=802 out=17 (reasoning 386) -> tool calls: lookup_nightreign_wiki({"query":"Fulghor"})
-16:25:14.921 INFO  [wiki] #1 "Fulghor" -> Fulghor Champion of Nightglow (6012 chars, 715ms) https://eldenringnightreign.wiki.fextralife.com/Fulghor_Champion_of_Nightglow
+16:25:14.921 INFO  [wiki:nightreign] #1 "Fulghor" -> Fulghor Champion of Nightglow (6012 chars, 715ms) https://eldenringnightreign.wiki.fextralife.com/Fulghor_Champion_of_Nightglow
 16:25:15.772 INFO  [llm] #1 r2 grok-4.3 0.85s tokens in=2344 out=24 -> answer (106 chars)
 16:25:15.773 INFO  [reply] #1 -> alice after 5.2s: fulghor is weak to lightning
 ```

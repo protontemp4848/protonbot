@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToText, NightreignWiki } from '../src/wiki.js';
+import { htmlToText, MediaWiki } from '../src/wiki.js';
+
+const baseUrl = 'https://eldenringnightreign.wiki.fextralife.com/';
 import { silentLog } from './helpers.js';
 
 /** Fake MediaWiki API: `opensearch`/`title`/`text` are arrays of titles, `pages` maps title -> HTML. */
@@ -21,7 +23,7 @@ function fakeApi({ opensearch = [], title = [], text = [], pages = {}, redirects
   return { fetchImpl, requests };
 }
 
-const wiki = (api, opts = {}) => new NightreignWiki({ fetchImpl: api.fetchImpl, log: silentLog, ...opts });
+const wiki = (api, opts = {}) => new MediaWiki({ baseUrl, fetchImpl: api.fetchImpl, log: silentLog, ...opts });
 
 test('htmlToText strips markup, scripts and entities but keeps structure', () => {
   const html = '<style>.x{}</style><h2>Gladius</h2><p>Weak to <a href="/Holy">Holy</a> &amp; <b>Sleep</b>&nbsp;!</p><table><tr><td>HP</td><td>17,558</td></tr></table><script>alert(1)</script><!-- c --><ul><li>A</li><li>B&#39;s &#x2014; ok</li></ul>';
@@ -98,7 +100,7 @@ test('cache is bounded', async () => {
 });
 
 test('HTTP and API errors are thrown, not swallowed (the bot reports them to the LLM)', async () => {
-  await assert.rejects(new NightreignWiki({ fetchImpl: async () => new Response('', { status: 503 }), log: silentLog }).lookup('x'), /wiki HTTP 503/);
+  await assert.rejects(new MediaWiki({ baseUrl, fetchImpl: async () => new Response('', { status: 503 }), log: silentLog }).lookup('x'), /wiki HTTP 503/);
   const api = fakeApi({ title: ['Gone'] });
   await assert.rejects(wiki(api).lookup('Gone'), /wiki API: The page you specified/);
 });

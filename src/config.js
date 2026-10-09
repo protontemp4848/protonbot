@@ -1,3 +1,5 @@
+import { WIKIS } from './wikis.js';
+
 const num = (v, d) => (v === undefined || v === '' ? d : Number(v));
 
 export function loadConfig(env = process.env) {
@@ -16,8 +18,8 @@ export function loadConfig(env = process.env) {
     googleDocUrl: env.GOOGLE_DOC_URL?.trim() || null,
     docCacheTtlMs: num(env.DOC_CACHE_TTL_MINUTES, 30) * 60_000,
     docCachePath: env.DOC_CACHE_PATH || '.cache/doc.txt',
-    // Let the LLM look up game facts on the Fextralife Nightreign wiki. On by default; NIGHTREIGN_WIKI=0 disables.
-    nightreignWiki: !['0', 'false'].includes(env.NIGHTREIGN_WIKI),
+    // Wikis the LLM may look game facts up on: ids from src/wikis.js, comma-separated, or "none".
+    wikis: parseWikis(env),
     logLevel: ['debug', 'info', 'warn', 'error'].includes(env.LOG_LEVEL) ? env.LOG_LEVEL : 'info',
     replyMode: env.REPLY_MODE === 'all' ? 'all' : 'mention',
     userCooldownMs: num(env.USER_COOLDOWN_SECONDS, 30) * 1000,
@@ -29,4 +31,12 @@ export function loadConfig(env = process.env) {
 
   if (!config.xaiApiKey) throw new Error('XAI_API_KEY is required');
   return config;
+}
+
+function parseWikis(env) {
+  let ids = (env.WIKIS ?? 'nightreign').split(',').map((s) => s.trim().toLowerCase()).filter((s) => s && s !== 'none');
+  // NIGHTREIGN_WIKI=0 predates WIKIS and still turns the Nightreign wiki off.
+  if (['0', 'false'].includes(env.NIGHTREIGN_WIKI)) ids = ids.filter((id) => id !== 'nightreign');
+  for (const id of ids) if (!Object.hasOwn(WIKIS, id)) throw new Error(`Unknown wiki "${id}" in WIKIS (known: ${Object.keys(WIKIS).join(', ')})`);
+  return [...new Set(ids)];
 }

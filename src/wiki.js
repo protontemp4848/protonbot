@@ -20,12 +20,13 @@ export function htmlToText(html) {
 }
 
 /**
- * Looks things up on the Fextralife Elden Ring Nightreign wiki via its MediaWiki API.
+ * Looks things up on a MediaWiki site (e.g. a Fextralife game wiki) via its API at <baseUrl>/api.php.
  * Results are cached in memory so repeated questions don't hit the wiki.
  */
-export class NightreignWiki {
+export class MediaWiki {
   constructor({
-    baseUrl = 'https://eldenringnightreign.wiki.fextralife.com',
+    baseUrl,
+    label = 'wiki', // log prefix, so lookups on different wikis can be told apart
     maxChars = 6_000,
     ttlMs = 60 * 60_000,
     maxEntries = 100,
@@ -33,7 +34,7 @@ export class NightreignWiki {
     now = Date.now,
     log = console,
   } = {}) {
-    Object.assign(this, { baseUrl: baseUrl.replace(/\/$/, ''), maxChars, ttlMs, maxEntries, fetchImpl, now, log });
+    Object.assign(this, { baseUrl: baseUrl.replace(/\/$/, ''), label, maxChars, ttlMs, maxEntries, fetchImpl, now, log });
     this.cache = new Map();
   }
 
@@ -48,7 +49,7 @@ export class NightreignWiki {
     const key = query.toLowerCase();
     const hit = this.cache.get(key);
     if (hit && this.now() - hit.at < this.ttlMs) {
-      this.log.debug?.(`[wiki] cache hit "${query}" -> ${hit.value?.title ?? 'no results'}`);
+      this.log.debug?.(`[${this.label}] cache hit "${query}" -> ${hit.value?.title ?? 'no results'}`);
       return hit.value;
     }
     const started = this.now();
@@ -62,7 +63,7 @@ export class NightreignWiki {
       if (text.length > this.maxChars) text = text.slice(0, this.maxChars) + '\n[truncated]';
       value = { title, url: this.pageUrl(title), text, otherResults: titles.slice(1).filter((t) => t.toLowerCase() !== title.toLowerCase()).slice(0, 4) };
     }
-    this.log.debug?.(`[wiki] fetched "${query}" -> ${value ? value.title : 'no results'} in ${this.now() - started}ms (candidates: ${titles.join(' | ') || 'none'})`);
+    this.log.debug?.(`[${this.label}] fetched "${query}" -> ${value ? value.title : 'no results'} in ${this.now() - started}ms (candidates: ${titles.join(' | ') || 'none'})`);
 
     this.cache.delete(key);
     this.cache.set(key, { at: this.now(), value });
