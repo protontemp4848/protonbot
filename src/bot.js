@@ -262,7 +262,7 @@ export class Bot {
     const text =
       why === 'user cooldown'
         ? `You're on cooldown, try again in ${secs(leftMs)}s.`
-        : `Busy answering someone else, try again in ${secs(leftMs)}s.`;
+        : `Bot is in global cooldown, try again in ${secs(leftMs)}s.`;
     if (this.config.dryRun) return this.log.info(`[dry-run] would tell ${msg.displayName}: ${text}`);
     this.twitch.say(text, msg.id);
     this.log.info(`[notice] -> ${msg.displayName}: ${text}`);
