@@ -30,7 +30,7 @@ From then on `npm start` reuses the saved token, refreshes it when it's close to
 
 To make it easy to collab with your chat on adding information to your bot, you can create a Google Doc.
 This doc will be read in as context when the bot starts.
-The doc will be cached for 30 minutes, or you can force a re-read if you restart the bot.
+The doc will be cached for 30 minutes. To pick up edits sooner, the streamer can type `!reload` in chat (or restart the bot).
 
 ## Chat commands
 
@@ -42,6 +42,7 @@ They don't need a mention and never call the LLM. All replies go to public chat.
 | `!github` (`!gh`, `!code`, `!source`) | anyone | Link to the source code: https://github.com/protontemp4848/protonbot                                  |
 | `!docs` (`!doc`, `!document`) | anyone | Link to the Google Doc: https://docs.google.com/document/d/1012QUmc-RePLNedKXR5ddZeDm6XcE3GiXcWupuMVa-M/edit?usp=sharing |
 | `!stats <tokens\|uptime>` | mods   | Grok calls and tokens used (in, out, reasoning), or how long the bot has been running, since it started |
+| `!reload`                 | streamer | Re-reads the Google Doc now, skipping the cache, and says whether it changed. If Google is down it keeps the copy it had |
 
 Commands share the 5s global cooldown, but not the 30s per-user one.
 
@@ -53,7 +54,7 @@ Add it to `COMMANDS` in `src/commands.js`; `!help` picks it up automatically. A 
 - `permission`: `all` (default), `mods` (mods and the streamer) or `streamer`. It's checked against the badges Twitch puts on the message, so it can't be faked. Anyone else gets "Sorry, !x is for mods only."
 - `usage`: the arguments it needs, e.g. `'<user>'`. Run without arguments, the command replies with its help instead.
 - `subcommands`: `{ name: { description, reply } }`, used in place of `reply` (see `!stats`). Run bare or with an unknown subcommand, the command replies with its help.
-- `reply({ args, msg, bot })` returns the message. `args` is the words after the command (or subcommand).
+- `reply({ args, msg, bot })` returns the message, or a promise of it (see `!reload`). If it throws, the error is logged and nothing is sent. `args` is the words after the command (or subcommand).
 
 ## Behaviour
 
@@ -82,7 +83,7 @@ Any MediaWiki site (Fextralife, Fandom, wiki.gg…) can be added without touchin
 
 Other kinds of tools go in `src/tools.js`: a tool is `{ definition, rule, run(args, ctx) }`, and `run` returns `{ content, source? }` (see the comment there). Pass it to `Bot` in `tools`.
 
-- The doc is fetched fresh every time the bot starts, so **restarting picks up doc edits**. After that it's cached in memory for `DOC_CACHE_TTL_MINUTES` (default 30). A copy is kept in `.cache/doc.txt` and is only used if Google can't be reached.
+- The doc is fetched fresh every time the bot starts, so **restarting picks up doc edits**, and so does `!reload` from the streamer. After that it's cached in memory for `DOC_CACHE_TTL_MINUTES` (default 30). A copy is kept in `.cache/doc.txt` and is only used if Google can't be reached.
 
 ## Logs
 

@@ -95,3 +95,29 @@ test('no URL configured returns empty context', async () => {
   const cache = new DocCache({ url: null, ttlMs: 1, cachePath: '/nonexistent', log: silentLog });
   assert.equal(await cache.get(), '');
 });
+
+test('reload fetches now, inside the TTL, says whether the doc changed, and resets the TTL', async () => {
+  const versions = ['v1', 'v2', 'v2'];
+  let calls = 0;
+  const { cache, advance } = await setup(async () => (calls++, textRes(versions.shift())));
+  assert.equal(await cache.get(), 'v1');
+  advance(10_000); // well inside the 60s TTL
+  assert.deepEqual(await cache.reload(), { text: 'v2', changed: true });
+  assert.equal(await cache.get(), 'v2', 'get serves the reloaded text');
+  assert.equal(calls, 2);
+  advance(59_000); // 69s since the first fetch but 59s since the reload: still cached
+  assert.equal(await cache.get(), 'v2');
+  assert.equal(calls, 2);
+  assert.deepEqual(await cache.reload(), { text: 'v2', changed: false });
+});
+
+test('a failed reload throws and keeps serving the copy it had', async () => {
+  let up = true;
+  const { cache } = await setup(async () => (up ? textRes('good copy') : new Response('', { status: 503 })));
+  assert.equal(await cache.get(), 'good copy');
+  up = false;
+  await assert.rejects(cache.reload(), /HTTP 503/);
+  assert.equal(await cache.get(), 'good copy');
+  const none = new DocCache({ url: null, log: silentLog });
+  await assert.rejects(none.reload(), /no GOOGLE_DOC_URL/);
+});

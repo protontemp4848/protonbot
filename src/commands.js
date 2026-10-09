@@ -1,3 +1,5 @@
+import { preview } from './log.js';
+
 /**
  * Chat commands: a message starting with "!<name>" gets a reply, with no LLM call and no need to mention the bot.
  * A command is { name, aliases?, description, permission?, usage?, subcommands?, reply(ctx) }:
@@ -6,7 +8,7 @@
  * - usage: the arguments it needs, e.g. '<user>'. Run without arguments, it replies with its help instead.
  * - subcommands: { name: { description, reply(ctx) } } in place of reply. Run bare or with an unknown subcommand,
  *   it replies with its help.
- * - reply(ctx) returns the message. ctx is { args, msg, bot }: the words after the command (or subcommand), the chat
+ * - reply(ctx) returns the message (or a promise of it). ctx is { args, msg, bot }: the words after the command (or subcommand), the chat
  *   message, and the Bot (for its stats).
  * All replies go to public chat. Add new commands to COMMANDS; !help lists them automatically.
  */
@@ -31,6 +33,19 @@ export const COMMANDS = [
     aliases: ['doc', 'document'],
     description: 'the doc I read my facts from',
     reply: () => 'My Google Doc: https://docs.google.com/document/d/1012QUmc-RePLNedKXR5ddZeDm6XcE3GiXcWupuMVa-M/edit?usp=sharing',
+  },
+  {
+    name: 'reload',
+    description: 're-reads the Google Doc now, skipping the 30 minute cache',
+    permission: 'streamer',
+    reply: async ({ bot }) => {
+      try {
+        const { text, changed } = await bot.doc.reload();
+        return `Reloaded the doc (${text.length.toLocaleString('en-US')} chars, ${changed ? 'changed' : 'no changes'}).`;
+      } catch (e) {
+        return `Couldn't reload the doc (${preview(e.message, 150)}), still using the copy I had.`;
+      }
+    },
   },
   {
     name: 'stats',
@@ -92,7 +107,7 @@ export function helpFor(c) {
   return `Usage: !${c.name}${c.usage ? ` ${c.usage}` : ''}: ${c.description}.${who}`;
 }
 
-/** Runs a command for ctx { args, msg, bot, role } and returns its reply: the answer, its help, or a refusal. */
+/** Runs a command for ctx { args, msg, bot, role } and returns its reply (or a promise of it): the answer, its help, or a refusal. */
 export function runCommand(c, ctx) {
   if (!canRun(c, ctx.role)) return `Sorry, !${c.name} is for ${c.permission === 'streamer' ? 'the streamer' : 'mods'} only.`;
   if (c.subcommands) {

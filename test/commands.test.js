@@ -44,10 +44,12 @@ test('!github and !docs link to the repo and the Google Doc', () => {
   assert.match(run('!docs'), /https:\/\/docs\.google\.com\/document\/d\/1012QUmc-RePLNedKXR5ddZeDm6XcE3GiXcWupuMVa-M\//);
 });
 
-test('every command reply is one valid, safe Twitch message', () => {
-  const bot = { llm: { usage: { calls: 1e6, tokensIn: 1e9, tokensOut: 1e8, reasoning: 1e8, unreported: 1e6 } }, now: () => 9e10, startedAt: 0 };
+test('every command reply is one valid, safe Twitch message', async () => {
+  const doc = { reload: async () => ({ text: 'x'.repeat(40_000), changed: true }) };
+  const bot = { llm: { usage: { calls: 1e6, tokensIn: 1e9, tokensOut: 1e8, reasoning: 1e8, unreported: 1e6 } }, now: () => 9e10, startedAt: 0, doc };
+  const brokenDoc = { reload: async () => Promise.reject(new Error('e'.repeat(1000))) };
   const texts = COMMANDS.flatMap((c) => [`!${c.name}`, `!help ${c.name}`, ...Object.keys(c.subcommands ?? {}).map((s) => `!${c.name} ${s}`)]).map((t) => run(t, 'streamer', bot));
-  for (const text of [...texts, run('!stats', 'all')]) {
+  for (const text of await Promise.all([...texts, run('!stats', 'all'), run('!reload', 'streamer', { doc: brokenDoc })])) {
     assert.ok(text.length > 0 && text.length <= 500, `${text.length} chars: ${text}`);
     assert.ok(!/^[/.!]/.test(text) && !/[\r\n]/.test(text), text); // "!" could trigger another bot's command
   }
@@ -197,4 +199,42 @@ test('bot: an alias is answered like the command itself', async () => {
   const { bot, sent } = makeBot();
   await bot.handle(msg('viewer', '!doc', 'd1'));
   assert.deepEqual(sent, [{ text: run('!docs'), id: 'd1' }]);
+});
+
+test('!reload: streamer only, re-reads the doc and says whether it changed', async () => {
+  let reloads = 0;
+  const bot = { doc: { reload: async () => (reloads++, { text: 'x'.repeat(12_340), changed: reloads === 1 }) } };
+  assert.equal(await run('!reload', 'mods', bot), 'Sorry, !reload is for the streamer only.');
+  assert.equal(await run('!reload', 'all', bot), 'Sorry, !reload is for the streamer only.');
+  assert.equal(reloads, 0, 'refused before touching the doc');
+  assert.equal(await run('!reload', 'streamer', bot), 'Reloaded the doc (12,340 chars, changed).');
+  assert.equal(await run('!reload', 'streamer', bot), 'Reloaded the doc (12,340 chars, no changes).');
+});
+
+test('!reload: when Google is down it says so and keeps the old copy', async () => {
+  const bot = { doc: { reload: async () => Promise.reject(new Error('HTTP 503')) } };
+  assert.equal(await run('!reload', 'streamer', bot), "Couldn't reload the doc (HTTP 503), still using the copy I had.");
+});
+
+test('bot: the streamer\'s !reload reaches the real doc, and the next question uses the new text', async () => {
+  const { bot, sent, llmCalls, advance } = makeBot();
+  let docText = 'old facts';
+  bot.doc = { get: async () => docText, reload: async () => ((docText = 'new facts'), { text: docText, changed: true }) };
+  await bot.handle(msg('dudley', '!reload', 'r1', STREAMER));
+  assert.deepEqual(sent, [{ text: 'Reloaded the doc (9 chars, changed).', id: 'r1' }]);
+  advance(5_000);
+  await bot.handle(msg('viewer', '@protonbot what are the facts?'));
+  assert.match(llmCalls[0][0].content, /<reference_document>\nnew facts\n/);
+});
+
+test('bot: a command that throws is logged, sends nothing and doesn\'t crash the bot', async () => {
+  const { bot, sent } = makeBot();
+  const boom = { name: 'boom', reply: async () => Promise.reject(new Error('kaboom')) };
+  COMMANDS.push(boom);
+  try {
+    assert.equal(await bot.handle(msg('viewer', '!boom')), null);
+    assert.equal(sent.length, 0);
+  } finally {
+    COMMANDS.pop();
+  }
 });

@@ -175,7 +175,14 @@ export class Bot {
     const t = this.now();
     this.lastReplyAt = t;
     const tag = ` #${++this.seq}`;
-    if (command) return this.#command(msg, command, tag);
+    if (command) {
+      try {
+        return await this.#command(msg, command, tag);
+      } catch (e) {
+        this.log.error(`[bot]${tag} !${command.name} failed: ${e.message}`);
+        return null;
+      }
+    }
     this.userLastReply.set(msg.user.toLowerCase(), t);
     const elapsed = () => `${((this.now() - t) / 1000).toFixed(1)}s`;
     this.log.info(`[bot]${tag} <- ${msg.displayName}: ${preview(msg.text, 200)}`);
@@ -238,9 +245,9 @@ export class Bot {
     return reply;
   }
 
-  #command(msg, command, tag) {
+  async #command(msg, command, tag) {
     this.log.info(`[bot]${tag} <- ${msg.displayName}: ${preview(msg.text, 80)}`);
-    const text = runCommand(command, { args: commandArgs(msg.text), msg, bot: this, role: roleOf(msg, this.config.channel) });
+    const text = await runCommand(command, { args: commandArgs(msg.text), msg, bot: this, role: roleOf(msg, this.config.channel) });
     this.#remember(this.config.botUsername, text);
     if (this.config.dryRun) return (this.log.info(`[dry-run]${tag} would reply to ${msg.displayName}: ${text}`), text);
     this.twitch.say(text, msg.id);

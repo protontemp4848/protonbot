@@ -30,6 +30,17 @@ export class DocCache {
     return this.inflight;
   }
 
+  /**
+   * Fetches the doc now, skipping the cache (for !reload). Returns { text, changed }. If Google can't be reached it
+   * throws and keeps serving the copy it had.
+   */
+  async reload() {
+    if (!this.url) throw new Error('no GOOGLE_DOC_URL is set');
+    const before = this.text;
+    const text = await this.#fetch();
+    return { text, changed: text !== before };
+  }
+
   async #loadDisk() {
     try {
       const [text, s] = await Promise.all([readFile(this.cachePath, 'utf8'), stat(this.cachePath)]);
@@ -42,19 +53,7 @@ export class DocCache {
 
   async #refresh() {
     try {
-      const res = await this.fetchImpl(toExportUrl(this.url), { redirect: 'follow', signal: AbortSignal.timeout(15_000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // Private docs redirect to a Google sign-in HTML page instead of returning text.
-      if (/text\/html/i.test(res.headers.get('content-type') ?? '')) {
-        throw new Error('got an HTML page, the doc is probably not shared as "Anyone with the link can view"');
-      }
-      const text = (await res.text()).replace(/^﻿/, '').trim().slice(0, this.maxChars);
-      this.text = text;
-      this.fetchedAt = this.now();
-      await mkdir(dirname(this.cachePath), { recursive: true });
-      await writeFile(this.cachePath, text);
-      this.log.info(`[doc] refreshed (${text.length} chars)`);
-      return text;
+      return await this.#fetch();
     } catch (err) {
       if (this.text !== null) {
         this.log.warn(`[doc] refresh failed (${err.message}), using stale cache`);
@@ -64,5 +63,21 @@ export class DocCache {
       }
       throw new Error(`[doc] could not load Google Doc: ${err.message}`);
     }
+  }
+
+  async #fetch() {
+    const res = await this.fetchImpl(toExportUrl(this.url), { redirect: 'follow', signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Private docs redirect to a Google sign-in HTML page instead of returning text.
+    if (/text\/html/i.test(res.headers.get('content-type') ?? '')) {
+      throw new Error('got an HTML page, the doc is probably not shared as "Anyone with the link can view"');
+    }
+    const text = (await res.text()).replace(/^﻿/, '').trim().slice(0, this.maxChars);
+    this.text = text;
+    this.fetchedAt = this.now();
+    await mkdir(dirname(this.cachePath), { recursive: true });
+    await writeFile(this.cachePath, text);
+    this.log.info(`[doc] refreshed (${text.length} chars)`);
+    return text;
   }
 }
