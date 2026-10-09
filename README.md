@@ -35,6 +35,7 @@ The doc will be cached for 30 minutes, or you can force a re-read if you restart
 ## Behaviour
 
 - Replies (as a threaded reply) only when someone mentions it by name or `@name`. Set `REPLY_MODE=all` to reply to everything.
+- Chat commands `!help`, `!github` and `!docs` get a fixed reply without a mention or an LLM call. They share the global cooldown but not the per-user one. Add more in `src/commands.js`.
 - Cooldowns: 30s per user and 5s globally by default, which keeps it well under Twitch's 20 msgs/30s limit.
 - When it ignores a mention because of a cooldown, it replies with how long is left ("You're on cooldown, try again in 24s." or "Busy answering someone else, try again in 4s."). Each viewer is told once per cooldown, and at most one notice goes out every 5s across the whole chat, so spamming the bot can't make it spam chat.
 - Ignores itself and common bots (Nightbot, StreamElements, …).

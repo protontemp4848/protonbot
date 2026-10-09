@@ -1,5 +1,6 @@
 import { preview } from './log.js';
 import { runTool } from './tools.js';
+import { findCommand } from './commands.js';
 
 const KNOWN_BOTS = new Set(['nightbot', 'streamelements', 'streamlabs', 'moobot', 'fossabot', 'wizebot', 'sery_bot', 'soundalerts']);
 const MAX_LEN = 450; // per message for the answer itself; source links can use the rest, up to Twitch's limit
@@ -139,22 +140,27 @@ export class Bot {
     return this.#skipReason(msg) === null;
   }
 
-  /** Why the bot won't answer this message ({ why, leftMs? } for cooldowns), or null if it will. */
-  #skipReason(msg) {
+  /**
+   * Why the bot won't answer this message ({ why, leftMs? } for cooldowns), or null if it will. Commands don't need a
+   * mention and skip the per-user cooldown (they cost no LLM call), but share the global one so "!help" spam can't flood chat.
+   */
+  #skipReason(msg, command = findCommand(msg.text)) {
     const user = msg.user.toLowerCase();
     if (user === this.config.botUsername) return { why: 'own message' };
     if (KNOWN_BOTS.has(user)) return { why: 'known bot' };
-    if (this.config.replyMode !== 'all' && !this.mentionRe.test(msg.text)) return { why: 'not mentioned' };
+    if (!command && this.config.replyMode !== 'all' && !this.mentionRe.test(msg.text)) return { why: 'not mentioned' };
     const t = this.now();
     const global = this.lastReplyAt + this.config.globalCooldownMs - t;
     if (global > 0) return { why: 'global cooldown', leftMs: global };
+    if (command) return null;
     const own = (this.userLastReply.get(user) ?? -Infinity) + this.config.userCooldownMs - t;
     if (own > 0) return { why: 'user cooldown', leftMs: own };
     return null;
   }
 
   async handle(msg) {
-    const skip = this.#skipReason(msg);
+    const command = findCommand(msg.text);
+    const skip = this.#skipReason(msg, command);
     this.#remember(msg.displayName, msg.text);
     if (skip) {
       // Ordinary chat isn't logged (LOG_CHAT does that); ignored mentions are, so "why didn't it answer?" has an answer.
@@ -167,8 +173,9 @@ export class Bot {
     // Claim the cooldown before awaiting so a burst of mentions doesn't trigger parallel LLM calls.
     const t = this.now();
     this.lastReplyAt = t;
-    this.userLastReply.set(msg.user.toLowerCase(), t);
     const tag = ` #${++this.seq}`;
+    if (command) return this.#command(msg, command, tag);
+    this.userLastReply.set(msg.user.toLowerCase(), t);
     const elapsed = () => `${((this.now() - t) / 1000).toFixed(1)}s`;
     this.log.info(`[bot]${tag} <- ${msg.displayName}: ${preview(msg.text, 200)}`);
 
@@ -228,6 +235,16 @@ export class Bot {
       this.log.info(`[reply]${tag} -> ${msg.displayName}${n} after ${elapsed()}: ${part}`);
     }
     return reply;
+  }
+
+  #command(msg, command, tag) {
+    const text = command.reply();
+    this.log.info(`[bot]${tag} <- ${msg.displayName}: !${command.name}`);
+    this.#remember(this.config.botUsername, text);
+    if (this.config.dryRun) return (this.log.info(`[dry-run]${tag} would reply to ${msg.displayName}: ${text}`), text);
+    this.twitch.say(text, msg.id);
+    this.log.info(`[reply]${tag} -> ${msg.displayName}: ${text}`);
+    return text;
   }
 
   /**
