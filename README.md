@@ -21,7 +21,7 @@ It uses a public Google Doc as its source of facts. No npm dependencies; needs N
 - Sends the last 20 chat lines to the LLM as context.
 - Output is limited to one line of ≤450 chars and is never allowed to start with `/` or `.`, so viewers can't trick it into running `/ban` and similar commands.
 
-### Game Specific Integrations
+### Game Specific Integrations.
 
 #### Elden Ring
 
